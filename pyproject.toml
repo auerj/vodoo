@@ -47,6 +47,10 @@ dev = [
     "ruff>=0.6.0",
     "types-Markdown>=3.5.0",
 ]
+semantic = [
+    "openai>=1.0.0",
+    "numpy>=1.26.0",
+]
 
 [tool.ruff]
 line-length = 100

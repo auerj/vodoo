@@ -1578,22 +1578,64 @@ def knowledge_search(
     ] = "keyword",
     limit: Annotated[int, typer.Option(help="Maximum number of results")] = 20,
 ) -> None:
-    """Search knowledge articles by name and body content."""
+    """Search knowledge articles by name and body content.
+    
+    Modes:
+      - keyword: Traditional substring search (default)
+      - semantic: AI-powered semantic search using OpenAI embeddings
+    
+    Semantic search requires OPENAI_API_KEY environment variable.
+    """
     client = get_client()
 
     if mode == "semantic":
-        console.print("[yellow]Semantic search not yet implemented. Using keyword search.[/yellow]")
+        try:
+            from vodoo.embeddings import semantic_search as do_semantic_search
+            
+            results = do_semantic_search(client, query, limit=limit, console=console)
+            
+            if results:
+                # Display results with similarity scores
+                from rich.table import Table
+                
+                table = Table(title="Semantic Search Results")
+                table.add_column("ID", style="cyan")
+                table.add_column("Name", style="white")
+                table.add_column("Score", style="green")
+                table.add_column("Preview", style="dim")
+                
+                for r in results:
+                    score = f"{r['similarity']:.3f}"
+                    preview = (r.get("body_snippet", "") or "")[:80]
+                    if len(r.get("body_snippet", "") or "") > 80:
+                        preview += "..."
+                    table.add_row(str(r["id"]), r["name"], score, preview)
+                
+                console.print(table)
+                console.print(f"\n[dim]Found {len(results)} articles matching '{query}'[/dim]")
+            else:
+                console.print(f"[yellow]No articles found matching '{query}'[/yellow]")
+        except ImportError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            console.print("[yellow]Install required packages: pip install openai numpy[/yellow]")
+            raise typer.Exit(1) from e
+        except ValueError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1) from e
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1) from e
+    else:
+        # Keyword mode (default) - OR domain: search in name OR body
+        domain: list[Any] = ["|", ("name", "ilike", query), ("body", "ilike", query)]
 
-    # OR domain: search in name OR body
-    domain: list[Any] = ["|", ("name", "ilike", query), ("body", "ilike", query)]
-
-    try:
-        articles = list_articles(client, domain=domain, limit=limit)
-        display_articles(articles)
-        console.print(f"\n[dim]Found {len(articles)} articles matching '{query}'[/dim]")
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        raise typer.Exit(1) from e
+        try:
+            articles = list_articles(client, domain=domain, limit=limit)
+            display_articles(articles)
+            console.print(f"\n[dim]Found {len(articles)} articles matching '{query}'[/dim]")
+        except Exception as e:
+            console.print(f"[red]Error:[/red] {e}")
+            raise typer.Exit(1) from e
 
 
 @knowledge_app.command("show")
